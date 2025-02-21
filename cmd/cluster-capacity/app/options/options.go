@@ -50,6 +50,7 @@ type ClusterCapacityOptions struct {
 	Verbose                    bool
 	PodSpecFile                string
 	OutputFormat               string
+	SchedulerName              string
 }
 
 func NewClusterCapacityConfig(opt *ClusterCapacityOptions) *ClusterCapacityConfig {
@@ -74,6 +75,8 @@ func (s *ClusterCapacityOptions) AddFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&s.Verbose, "verbose", s.Verbose, "Verbose mode")
 	fs.StringVarP(&s.OutputFormat, "output", "o", s.OutputFormat, "Output format. One of: json|yaml (Note: output is not versioned or guaranteed to be stable across releases).")
+
+	fs.StringVar(&s.SchedulerName, "scheduler-name", s.SchedulerName, "Custom scheduler name if using an alternative scheduler.")
 }
 
 func (s *ClusterCapacityConfig) ParseAPISpec(schedulerName string) error {

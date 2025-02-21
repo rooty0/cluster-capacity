@@ -83,6 +83,10 @@ func Validate(opt *options.ClusterCapacityOptions) error {
 		return fmt.Errorf("Pod spec file is missing")
 	}
 
+	if len(opt.SchedulerName) == 0 {
+		opt.SchedulerName = v1.DefaultSchedulerName
+	}
+
 	_, present := os.LookupEnv("CC_INCLUSTER")
 	if !present {
 		if len(opt.Kubeconfig) == 0 {
@@ -114,7 +118,7 @@ func Run(opt *options.ClusterCapacityOptions) error {
 		kcfg = nil
 	}
 
-	cc, err := utils.BuildKubeSchedulerCompletedConfig(kcfg)
+	cc, err := utils.BuildKubeSchedulerCompletedConfig(kcfg, conf.Options.SchedulerName)
 	if err != nil {
 		return fmt.Errorf("failed to init kube scheduler configuration: %v ", err)
 	}
@@ -161,7 +165,7 @@ func Run(opt *options.ClusterCapacityOptions) error {
 }
 
 func runSimulator(s *options.ClusterCapacityConfig, kubeSchedulerConfig *schedconfig.CompletedConfig) (*framework.ClusterCapacityReview, error) {
-	cc, err := framework.New(kubeSchedulerConfig, s.RestConfig, s.Pod, s.Options.MaxLimit, s.Options.ExcludeNodes)
+	cc, err := framework.New(kubeSchedulerConfig, s.RestConfig, s.Pod, s.Options.MaxLimit, s.Options.ExcludeNodes, s.Options.SchedulerName)
 	if err != nil {
 		return nil, err
 	}

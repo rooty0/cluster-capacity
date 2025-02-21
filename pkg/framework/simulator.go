@@ -104,7 +104,7 @@ func newPodInformer(cs externalclientset.Interface, resyncPeriod time.Duration) 
 // Create new cluster capacity analysis
 // The analysis is completely independent of apiserver so no need
 // for kubeconfig nor for apiserver url
-func New(kubeSchedulerConfig *schedconfig.CompletedConfig, kubeConfig *restclient.Config, simulatedPod *v1.Pod, maxPods int, excludeNodes []string) (*ClusterCapacity, error) {
+func New(kubeSchedulerConfig *schedconfig.CompletedConfig, kubeConfig *restclient.Config, simulatedPod *v1.Pod, maxPods int, excludeNodes []string, SchedulerName string) (*ClusterCapacity, error) {
 	watch.DefaultChanSize = 10000
 	client := fakeclientset.NewSimpleClientset()
 	sharedInformerFactory := informers.NewSharedInformerFactory(client, 0)
@@ -138,13 +138,13 @@ func New(kubeSchedulerConfig *schedconfig.CompletedConfig, kubeConfig *restclien
 
 	cc.schedulers = make(map[string]*scheduler.Scheduler)
 
-	scheduler, err := cc.createScheduler(v1.DefaultSchedulerName, kubeSchedulerConfig)
+	scheduler, err := cc.createScheduler(SchedulerName, kubeSchedulerConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	cc.schedulers[v1.DefaultSchedulerName] = scheduler
-	cc.defaultSchedulerName = v1.DefaultSchedulerName
+	cc.schedulers[SchedulerName] = scheduler
+	cc.defaultSchedulerName = SchedulerName
 	cc.defaultSchedulerConf = kubeSchedulerConfig
 
 	cc.informerFactory.Start(cc.informerStopCh)
