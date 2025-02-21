@@ -2,3 +2,8 @@
 *.swo
 /bazel-*
 .idea
+cluster-capacity
+genpod
+hypercc
+test.yaml
+

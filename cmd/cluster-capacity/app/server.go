@@ -19,6 +19,7 @@ package app
 import (
 	"flag"
 	"fmt"
+	"k8s.io/klog/v2"
 	"os"
 
 	"github.com/lithammer/dedent"
@@ -72,6 +73,10 @@ func NewClusterCapacityCommand() *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.SetNormalizeFunc(aflag.WordSepNormalizeFunc)
+
+	// Set the Kubernetes scheduler log level
+	klog.InitFlags(flag.CommandLine)
+
 	flags.AddGoFlagSet(flag.CommandLine)
 	opt.AddFlags(flags)
 
@@ -81,6 +86,10 @@ func NewClusterCapacityCommand() *cobra.Command {
 func Validate(opt *options.ClusterCapacityOptions) error {
 	if len(opt.PodSpecFile) == 0 {
 		return fmt.Errorf("Pod spec file is missing")
+	}
+
+	if len(opt.SchedulerName) == 0 {
+		opt.SchedulerName = v1.DefaultSchedulerName
 	}
 
 	_, present := os.LookupEnv("CC_INCLUSTER")
@@ -114,7 +123,7 @@ func Run(opt *options.ClusterCapacityOptions) error {
 		kcfg = nil
 	}
 
-	cc, err := utils.BuildKubeSchedulerCompletedConfig(kcfg)
+	cc, err := utils.BuildKubeSchedulerCompletedConfig(kcfg, conf.Options.SchedulerName)
 	if err != nil {
 		return fmt.Errorf("failed to init kube scheduler configuration: %v ", err)
 	}
@@ -150,18 +159,18 @@ func Run(opt *options.ClusterCapacityOptions) error {
 		return err
 	}
 
-	report, err := runSimulator(conf, cc)
+	_, err = runSimulator(conf, cc)
 	if err != nil {
 		return err
 	}
-	if err := framework.ClusterCapacityReviewPrint(report, conf.Options.Verbose, conf.Options.OutputFormat); err != nil {
-		return fmt.Errorf("Error while printing: %v", err)
-	}
+	//if err := framework.ClusterCapacityReviewPrint(report, conf.Options.Verbose, conf.Options.OutputFormat); err != nil {
+	//	return fmt.Errorf("Error while printing: %v", err)
+	//}
 	return nil
 }
 
 func runSimulator(s *options.ClusterCapacityConfig, kubeSchedulerConfig *schedconfig.CompletedConfig) (*framework.ClusterCapacityReview, error) {
-	cc, err := framework.New(kubeSchedulerConfig, s.RestConfig, s.Pod, s.Options.MaxLimit, s.Options.ExcludeNodes)
+	cc, err := framework.New(kubeSchedulerConfig, s.RestConfig, s.Pod, s.Options.MaxLimit, s.Options.ExcludeNodes, s.Options.SchedulerName)
 	if err != nil {
 		return nil, err
 	}

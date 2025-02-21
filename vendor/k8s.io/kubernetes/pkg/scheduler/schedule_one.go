@@ -1053,6 +1053,9 @@ func (sched *Scheduler) handleSchedulingFailure(ctx context.Context, fwk framewo
 		podInfo.UnschedulablePlugins = fitError.Diagnosis.UnschedulablePlugins
 		podInfo.PendingPlugins = fitError.Diagnosis.PendingPlugins
 		logger.V(2).Info("Unable to schedule pod; no fit; waiting", "pod", klog.KObj(pod), "err", errMsg)
+		for nodeName, st := range fitError.Diagnosis.NodeToStatusMap {
+			logger.V(2).Info("FITERROR", "NODE", nodeName, "STATUS", st.Code(), "PLUGIN", st.Plugin(), "REASON", st.Message())
+		}
 	} else {
 		logger.Error(err, "Error scheduling pod; retrying", "pod", klog.KObj(pod))
 	}

@@ -19,6 +19,11 @@ package framework
 import (
 	"context"
 	"fmt"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/kubernetes/pkg/scheduler/framework"
+	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
+	"sigs.k8s.io/cluster-capacity/pkg/framework/plugins/clustercapacitybinder"
+	"sigs.k8s.io/cluster-capacity/pkg/framework/plugins/fiterrorreporter"
 	"sync"
 	"time"
 
@@ -26,7 +31,6 @@ import (
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/dynamic"
@@ -38,14 +42,10 @@ import (
 	restclient "k8s.io/client-go/rest"
 	schedconfig "k8s.io/kubernetes/cmd/kube-scheduler/app/config"
 	"k8s.io/kubernetes/pkg/scheduler"
-	framework "k8s.io/kubernetes/pkg/scheduler/framework"
-	frameworkruntime "k8s.io/kubernetes/pkg/scheduler/framework/runtime"
 	"k8s.io/kubernetes/pkg/scheduler/profile"
 
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/events"
-
-	"sigs.k8s.io/cluster-capacity/pkg/framework/plugins/clustercapacitybinder"
 )
 
 const (
@@ -104,7 +104,7 @@ func newPodInformer(cs externalclientset.Interface, resyncPeriod time.Duration) 
 // Create new cluster capacity analysis
 // The analysis is completely independent of apiserver so no need
 // for kubeconfig nor for apiserver url
-func New(kubeSchedulerConfig *schedconfig.CompletedConfig, kubeConfig *restclient.Config, simulatedPod *v1.Pod, maxPods int, excludeNodes []string) (*ClusterCapacity, error) {
+func New(kubeSchedulerConfig *schedconfig.CompletedConfig, kubeConfig *restclient.Config, simulatedPod *v1.Pod, maxPods int, excludeNodes []string, SchedulerName string) (*ClusterCapacity, error) {
 	watch.DefaultChanSize = 10000
 	client := fakeclientset.NewSimpleClientset()
 	sharedInformerFactory := informers.NewSharedInformerFactory(client, 0)
@@ -138,13 +138,13 @@ func New(kubeSchedulerConfig *schedconfig.CompletedConfig, kubeConfig *restclien
 
 	cc.schedulers = make(map[string]*scheduler.Scheduler)
 
-	scheduler, err := cc.createScheduler(v1.DefaultSchedulerName, kubeSchedulerConfig)
+	scheduler, err := cc.createScheduler(SchedulerName, kubeSchedulerConfig)
 	if err != nil {
 		return nil, err
 	}
 
-	cc.schedulers[v1.DefaultSchedulerName] = scheduler
-	cc.defaultSchedulerName = v1.DefaultSchedulerName
+	cc.schedulers[SchedulerName] = scheduler
+	cc.defaultSchedulerName = SchedulerName
 	cc.defaultSchedulerConf = kubeSchedulerConfig
 
 	cc.informerFactory.Start(cc.informerStopCh)
@@ -158,15 +158,16 @@ func New(kubeSchedulerConfig *schedconfig.CompletedConfig, kubeConfig *restclien
 }
 
 func (c *ClusterCapacity) Report() *ClusterCapacityReview {
-	if c.report == nil {
-		// Preparation before pod sequence scheduling is done
-		pods := make([]*v1.Pod, 0)
-		pods = append(pods, c.simulatedPod)
-		c.report = GetReport(pods, c.status)
-		c.report.Spec.Replicas = int32(c.maxSimulated)
-	}
-
-	return c.report
+	//if c.report == nil {
+	//	// Preparation before pod sequence scheduling is done
+	//	pods := make([]*v1.Pod, 0)
+	//	//pods = append(pods, c.simulatedPod)
+	//c.report = GetReport(pods, c.status)
+	//	c.report.Spec.Replicas = int32(c.maxSimulated)
+	//}
+	//
+	//return c.report
+	return &ClusterCapacityReview{}
 }
 
 func (c *ClusterCapacity) ScheduledPods() []*v1.Pod {
@@ -297,18 +298,18 @@ func (c *ClusterCapacity) SyncWithClient(client externalclientset.Interface) err
 func (c *ClusterCapacity) postBindHook(updatedPod *v1.Pod) error {
 	c.status.Pods = append(c.status.Pods, updatedPod)
 
-	if c.maxSimulated > 0 && c.simulated >= c.maxSimulated {
-		c.status.StopReason = fmt.Sprintf("LimitReached: Maximum number of pods simulated: %v", c.maxSimulated)
-		c.Close()
-		c.stop <- struct{}{}
-		return nil
-	}
+	//if c.maxSimulated > 0 && c.simulated >= c.maxSimulated {
+	//	c.status.StopReason = fmt.Sprintf("LimitReached: Maximum number of pods simulated: %v", c.maxSimulated)
+	c.Close()
+	c.stop <- struct{}{}
+	return nil
+	//}
 
 	// all good, create another pod
-	if err := c.createNextPod(); err != nil {
-		return fmt.Errorf("Unable to create next pod for simulated scheduling: %v", err)
-	}
-	return nil
+	//if err := c.createNextPod(); err != nil {
+	//	return fmt.Errorf("Unable to create next pod for simulated scheduling: %v", err)
+	//}
+	//return nil
 }
 
 func (c *ClusterCapacity) Close() {
@@ -325,19 +326,19 @@ func (c *ClusterCapacity) Close() {
 }
 
 func (c *ClusterCapacity) Update(pod *v1.Pod, podCondition *v1.PodCondition, schedulerName string) error {
-	stop := podCondition.Type == v1.PodScheduled && podCondition.Status == v1.ConditionFalse && podCondition.Reason == "Unschedulable"
+	//stop := podCondition.Type == v1.PodScheduled && podCondition.Status == v1.ConditionFalse && podCondition.Reason == "Unschedulable"
 
 	// Only for pending pods provisioned by cluster-capacity
-	if stop && metav1.HasAnnotation(pod.ObjectMeta, podProvisioner) {
-		c.status.StopReason = fmt.Sprintf("%v: %v", podCondition.Reason, podCondition.Message)
-		c.Close()
-		// The Update function can be run more than once before any corresponding
-		// scheduler is closed. The behaviour is implementation specific
-		c.stopMux.Lock()
-		defer c.stopMux.Unlock()
-		c.stopped = true
-		c.stop <- struct{}{}
-	}
+	//if stop && metav1.HasAnnotation(pod.ObjectMeta, podProvisioner) {
+	c.status.StopReason = fmt.Sprintf("%v: %v", podCondition.Reason, podCondition.Message)
+	c.Close()
+	// The Update function can be run more than once before any corresponding
+	// scheduler is closed. The behaviour is implementation specific
+	c.stopMux.Lock()
+	defer c.stopMux.Unlock()
+	c.stopped = true
+	c.stop <- struct{}{}
+	//}
 	return nil
 }
 
@@ -384,6 +385,9 @@ func (c *ClusterCapacity) createScheduler(schedulerName string, cc *schedconfig.
 	outOfTreeRegistry := frameworkruntime.Registry{
 		"ClusterCapacityBinder": func(ctx context.Context, configuration runtime.Object, f framework.Handle) (framework.Plugin, error) {
 			return clustercapacitybinder.New(c.externalkubeclient, configuration, f, c.postBindHook)
+		},
+		"FitErrorReporter": func(ctx context.Context, configuration runtime.Object, f framework.Handle) (framework.Plugin, error) {
+			return fiterrorreporter.New(c.externalkubeclient, configuration, f)
 		},
 	}
 

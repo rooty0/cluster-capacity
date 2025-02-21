@@ -87,7 +87,7 @@ func GetMasterFromKubeConfig(filename string) (string, error) {
 	return "", fmt.Errorf("Failed to get master address from kubeconfig")
 }
 
-func BuildKubeSchedulerCompletedConfig(kcfg *kubeschedulerconfig.KubeSchedulerConfiguration) (*schedconfig.CompletedConfig, error) {
+func BuildKubeSchedulerCompletedConfig(kcfg *kubeschedulerconfig.KubeSchedulerConfiguration, SchedulerName string) (*schedconfig.CompletedConfig, error) {
 	if kcfg == nil {
 		kcfg = &kubeschedulerconfig.KubeSchedulerConfiguration{}
 		versionedCfg := kubeschedulerconfigv1.KubeSchedulerConfiguration{}
@@ -105,7 +105,7 @@ func BuildKubeSchedulerCompletedConfig(kcfg *kubeschedulerconfig.KubeSchedulerCo
 		}
 	}
 
-	kcfg.Profiles[0].SchedulerName = v1.DefaultSchedulerName
+	kcfg.Profiles[0].SchedulerName = SchedulerName
 	if kcfg.Profiles[0].Plugins == nil {
 		kcfg.Profiles[0].Plugins = &kubeschedulerconfig.Plugins{}
 	}
@@ -113,6 +113,10 @@ func BuildKubeSchedulerCompletedConfig(kcfg *kubeschedulerconfig.KubeSchedulerCo
 	kcfg.Profiles[0].Plugins.Bind = kubeschedulerconfig.PluginSet{
 		Enabled:  []kubeschedulerconfig.Plugin{{Name: "ClusterCapacityBinder"}},
 		Disabled: []kubeschedulerconfig.Plugin{{Name: "DefaultBinder"}},
+	}
+
+	kcfg.Profiles[0].Plugins.PostFilter = kubeschedulerconfig.PluginSet{
+		Enabled: []kubeschedulerconfig.Plugin{{Name: "FitErrorReporter"}},
 	}
 
 	opts := &kubescheduleroptions.Options{
