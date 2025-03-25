@@ -119,6 +119,10 @@ func BuildKubeSchedulerCompletedConfig(kcfg *kubeschedulerconfig.KubeSchedulerCo
 		Enabled: []kubeschedulerconfig.Plugin{{Name: "FitErrorReporter"}},
 	}
 
+	kcfg.Profiles[0].Plugins.PreScore = kubeschedulerconfig.PluginSet{
+		Enabled: []kubeschedulerconfig.Plugin{{Name: "FitErrorReporter"}},
+	}
+
 	opts := &kubescheduleroptions.Options{
 		ComponentGlobalsRegistry: utilversion.DefaultComponentGlobalsRegistry,
 		ComponentConfig:          kcfg,

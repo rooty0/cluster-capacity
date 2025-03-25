@@ -237,6 +237,28 @@ func (c *ClusterCapacity) SyncWithClient(client externalclientset.Interface) err
 		}
 	}
 
+	pvItems, err := client.CoreV1().PersistentVolumes().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to list pvs: %v", err)
+	}
+
+	for _, item := range pvItems.Items {
+		if _, err := c.externalkubeclient.CoreV1().PersistentVolumes().Create(context.TODO(), &item, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("unable to copy pv: %v", err)
+		}
+	}
+
+	csinodeItems, err := client.StorageV1().CSINodes().List(context.TODO(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to list csinodes: %v", err)
+	}
+
+	for _, item := range csinodeItems.Items {
+		if _, err := c.externalkubeclient.StorageV1().CSINodes().Create(context.TODO(), &item, metav1.CreateOptions{}); err != nil {
+			return fmt.Errorf("unable to copy csinode: %v", err)
+		}
+	}
+
 	rcItems, err := client.CoreV1().ReplicationControllers(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to list RCs: %v", err)
